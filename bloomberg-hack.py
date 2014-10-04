@@ -1,6 +1,6 @@
 from os.path import abspath, dirname, join
 
-from flask import Flask, Markup, flash, url_for, render_template, redirect, session
+from flask import Flask, Markup, flash, url_for, render_template, redirect, session, request
 from flask_sqlalchemy import SQLAlchemy
 from flask.ext.wtf import Form
 from wtforms import fields
@@ -38,14 +38,37 @@ class StockForm(Form):
     ticker_data = fields.StringField()
     stock = QuerySelectField(query_factory=Portfolio.query.all)
 
-@app.route("/")
-def index():
+@app.route('/')
+def landing_page(): 
+    stock_form = StockForm()
+    if 'username' in session:
+      return 'Logged in as %s' % escape(session['username'])
+    return render_template('landing_page.html')
+
+@app.route("/home")
+def home():
     stock_form = StockForm()
     return render_template("index.html",
-                           site_form=stock_form)
+                           stock_form=stock_form)
 
+@app.route('/login', methods=['GET', 'POST'])
+def login(): 
+    error = None
+    if request.method == 'POST':
+        if request.form['username'] != 'admin' or \
+                request.form['password'] != 'secret':
+            error = 'Invalid credentials'
+        else:
+            flash('You were successfully logged in')
+            return redirect(url_for('home'))
+    return render_template('login.html', error=error)
 
-@app.route("/site", methods=("POST", ))
+@app.route('/logout')
+def logout():
+    session.pop('username', None)
+    return redirect(url_for('home'))
+
+@app.route("/stock", methods=("POST", ))
 def add_site():
     form = StockForm()
     if form.validate_on_submit():
@@ -53,35 +76,17 @@ def add_site():
         form.populate_obj(site)
         db.session.add(site)
         db.session.commit()
-        flash("Added site")
-        return redirect(url_for("index"))
+        flash("Added stock " + form.stock.data.name)
+        return redirect(url_for("home"))
     return render_template("validation_error.html", form=form)
 
 
-@app.route("/sites")
+@app.route("/porfolio")
 def view_sites():
-    query = Site.query.filter(Site.id >= 0)
+    query = Portfolio.query.filter(Portfolio.id >= 0)
     data = query_to_list(query)
-    data = [next(data)] + [[_make_link(cell) if i == 0 else cell for i, cell in enumerate(row)] for row in data]
+    data = [next(data)] + [[cell for i, cell in enumerate(row)] for row in data]
     return render_template("data_list.html", data=data, type="Sites")
-
-
-_LINK = Markup('<a href="{url}">{name}</a>')
-
-
-def _make_link(site_id):
-    url = url_for("view_site_visits", site_id=site_id)
-    return _LINK.format(url=url, name=site_id)
-
-
-@app.route("/site/<int:site_id>")
-def view_site_visits(site_id=None):
-    site = Site.query.get_or_404(site_id)
-    query = Visit.query.filter(Visit.site_id == site_id)
-    data = query_to_list(query)
-    title = "visits for " + site.name
-    return render_template("data_list.html", data=data, type=title)
-
 
 def query_to_list(query, include_field_names=True):
     """Turns a SQLAlchemy query into a list of data values."""

@@ -3,10 +3,10 @@
 {% block title %}Ticker Watch{% endblock %}
 {% block content %}
 {{ super() }}
-<form action="/site" method="POST">
+<form action="/stock" method="POST">
 <fieldset>
 <legend>Add A Stock</legend>
-{{ forms.render(site_form) }}
+{{ forms.render(stock_form) }}
 <p><input type="Submit" value="Save to Portfolio"></p>
 </fieldset>
 </form>
