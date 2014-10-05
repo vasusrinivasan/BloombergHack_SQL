@@ -17,6 +17,17 @@ to_addr  = None
 def current_time() :
     return time.time()
 
+"""
+Inputs:
+	number: STRING, length-10 string of phone number
+		DO NOT INCLDE PUNCATION/FORMATTING
+	carrier: STRING of carrier name. Supported:
+		att, at&t, verizon, boost, virgin
+	msg: STRING of message to text
+RETURN:
+	Return SUCCESS == 0 upon success
+	Return FAILURE == 1 upon failure
+"""
 def send_text(number, carrier, msg):
 	# Check for valid number
 	to_addr = str(number) + '@'
