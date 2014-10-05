@@ -179,7 +179,10 @@ def db_get_number(user_id):
 
 # WARNING: No safety checks
 def db_get_user_obj(user_id):
-	return col_user_info.find_one({'user_id' : user_id})
+	if(col_user_info.find({'user_id' : user_id}).count() == 0):
+		return None
+	else:
+		return col_user_info.find_one({'user_id' : user_id})
 
 if __name__ == '__main__':
 	__init__()
