@@ -5,6 +5,7 @@
 {{ super() }}
 <form action="/stock" method="POST">
 <fieldset>
+{{ stock_form.hidden_tag() }}
 <legend>Add A Stock</legend>
 {{ forms.render(stock_form) }}
 <p><input type="Submit" value="Save to Portfolio"></p>
