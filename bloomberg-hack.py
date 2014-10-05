@@ -2,47 +2,106 @@ from os.path import abspath, dirname, join
 from flask import Flask, Markup, flash, url_for, render_template, redirect, session, request
 from flask_sqlalchemy import SQLAlchemy
 from flask.ext.wtf import Form
-from flask.ext.login import LoginManager
+from flask.ext.babel import Babel
+from flask_user import current_user, login_required, UserManager, UserMixin, SQLAlchemyAdapter
 from wtforms import fields
 from wtforms.ext.sqlalchemy.fields import QuerySelectField
 
-_cwd = dirname(abspath(__file__))
-login_manager = LoginManager()
-
-SECRET_KEY = '\x07&\xda\xdc`:k\xa3\xeaC\xb86\x14\x1f\xd5\x9b\x9d\xb3\x1e\xf2\xc20\x07Y'
-SQLALCHEMY_DATABASE_URI = 'sqlite:///' + join(_cwd, 'bloomberg-hack.db')
-SQLALCHEMY_ECHO = True
-WTF_CSRF_SECRET_KEY = '\x18r*2\x91|\xa3(\x0b\xb7\xfao-\xf9b\xb2\x07{\xa6l'
+class ConfigClass(object):
+    SECRET_KEY = '\x07&\xda\xdc`:k\xa3\xeaC\xb86\x14\x1f\xd5\x9b\x9d\xb3\x1e\xf2\xc20\x07Y'
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + join(dirname(abspath(__file__)), 'bloomberg-hack.db')
+    SQLALCHEMY_ECHO = True
+    WTF_CSRF_SECRET_KEY = '\x18r*2\x91|\xa3(\x0b\xb7\xfao-\xf9b\xb2\x07{\xa6l'
+    CSRF_ENABLED = True
+    USER_ENABLE_EMAIL = False
+    USER_ENABLE_RETYPE_PASSWORD = False
+    USER_ENABLE_USERNAME = True
+    USER_ENABLE_EMAIL  = False
 
 app = Flask(__name__)
-app.config.from_object(__name__)
-login_manager.init_app(app)
+app.config.from_object(__name__+'.ConfigClass')
 
+babel = Babel(app)
 db = SQLAlchemy(app)
 
-@login_manager.user_loader
-def load_user(userid):
-    return User.query.get(int(id))
+@babel.localeselector
+def get_locale():
+    translations = [str(translation) for translation in babel.list_translations()]
+    return request.accept_languages.best_match(translations)
 
-@app.route('/login', methods=['GET', 'POST'])
-def login(): 
-    error = None
-    if request.method == 'POST':
-        if request.form['username'] != 'admin' or \
-                request.form['password'] != 'secret':
-            error = 'Invalid credentials'
-        else:
-            flash('You were successfully logged in')
-            return redirect(url_for('home'))
-    return render_template('login.html', error=error)
+# Define User model. Make sure to add flask.ext.user UserMixin!!
+class User(db.Model, UserMixin):
+    id = db.Column(db.Integer, primary_key=True)
+    active = db.Column(db.Boolean(), nullable=False, default=False)
+    username = db.Column(db.String(50), nullable=False, unique=True)
+    password = db.Column(db.String(255), nullable=False, default='')
+
+db.create_all()
+
+db_adapter = SQLAlchemyAdapter(db,  User)       # Select database adapter
+user_manager = UserManager(db_adapter, app)     # Init Flask-User and bind to app
+
+@app.route('/')
+def landing_page(): 
+    stock_form = StockForm()
+    if 'username' in session:
+      return render_template('home')
+    return render_template('landing_page.html')
+
+
+@app.route('/')
+def home_page():
+    return render_template_string("""
+        {% extends "base.html" %}
+        {% block content %}
+            <h2>{%trans%}Home Page{%endtrans%}</h2>
+            {% if current_user.is_authenticated() %}
+            <p> <a href="{{ url_for('profile_page') }}">
+                {%trans%}Profile Page{%endtrans%}</a></p>
+            <p> <a href="{{ url_for('user.logout') }}">
+                {%trans%}Sign out{%endtrans%}</a></p>
+            {% else %}
+            <p> <a href="{{ url_for('user.login') }}">
+                {%trans%}Sign in or Register{%endtrans%}</a></p>
+            {% endif %}
+        {% endblock %}
+        """)
+    if current_user.is_authenticated():
+        return redirect(url_for('home'))
+    else:
+        return redirect(url_for('user.login'))
+
+# @app.route('/login', methods=['GET', 'POST'])
+# def login(): 
+#     error = None
+#     if request.method == 'POST':
+#         if request.form['username'] != 'admin' or \
+#                 request.form['password'] != 'secret':
+#             error = 'Invalid credentials'
+#         else:
+#             flash('You were successfully logged in')
+#             return redirect(url_for('home'))
+#     return render_template(url_for('login'), error=error)
+
+# @app.route("/login", methods=["GET", "POST"])
+# def login():
+#     form = LoginForm()
+#     if form.validate_on_submit():
+#         # login and validate the user...
+#         login_user(user)
+#         flash("Logged in successfully.")
+#         return redirect(request.args.get("next") or url_for("home"))
+#     return render_template("login.html", form=form)
 
 @app.route('/logout')
+@login_required
 def logout():
     session.pop('username', None)
-    return redirect(url_for('home'))
+    return redirect(url_for('landing_page'))
 
 
 @app.route("/settings")
+@login_required
 def settings():
     pass
 
@@ -63,12 +122,14 @@ class Stock(db.Model):
 class StockForm(Form):
     stock_name = fields.StringField()
 
-@app.route('/')
-def landing_page(): 
-    stock_form = StockForm()
-    if 'username' in session:
-      return 'Logged in as %s' % escape(session['username'])
-    return render_template('landing_page.html')
+class UsersxStocks(db.Model):
+    __tablename__ = 'subscribed_users'
+
+    id = db.Column(db.Integer, primary_key=True)
+    stock = db.Column(db.String)
+    user_name = db.Column(db.String)
+
+
 
 @app.route("/home")
 def home():
@@ -79,19 +140,24 @@ def home():
 
 
 @app.route("/stock", methods=("POST", ))
+@login_required
 def add_stock():
     form = StockForm()
     if form.validate_on_submit():
+        def is_valid_stock(stock):
+            db.session
         stock = Stock()
-        form.populate_obj(stock)
-        db.session.add(stock)
-        db.session.commit()
-        flash("Added stock " + form.stock_name.data)
+        if is_valid_stock(stock):
+            form.populate_obj(stock)
+            db.session.add(stock)
+            db.session.commit()
+            flash("Added stock " + form.stock_name.data)
         return redirect(url_for("view_stocks"))
     return render_template("validation_error.html", form=form)
 
 
 @app.route("/porfolio")
+@login_required
 def view_stocks():
     query = Stock.query.filter(Stock.id >= 0)
     data = query_to_list(query)
