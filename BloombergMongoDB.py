@@ -177,6 +177,9 @@ def db_get_number(user_id):
 	return (str(doc['number']), str(doc['carrier']))
 	
 
+# WARNING: No safety checks
+def db_get_user_obj(user_id):
+	return col_user_info.find_one({'user_id' : user_id})
 
 if __name__ == '__main__':
 	__init__()
